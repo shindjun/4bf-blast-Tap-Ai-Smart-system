@@ -8,7 +8,6 @@ import matplotlib
 matplotlib.rcParams['font.family'] = 'NanumGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-# 페이지 기본설정
 st.set_page_config(page_title="BlastTap 6.2 Master AI 통합엔진", layout="wide")
 st.title("🔥 BlastTap 6.2 Master AI 고로조업 통합 수지엔진")
 
@@ -96,7 +95,7 @@ st.sidebar.header("⑨ 예상 이론출선량 입력")
 theoretical_tap = st.sidebar.number_input("예상 이론출선량 (ton)", value=1215.0)
 
 # ------------------------------
-# 3단계 — 실시간 경과시간 계산
+# 실시간 경과시간 계산
 # ------------------------------
 now = datetime.datetime.now()
 today_start = datetime.datetime.combine(datetime.date.today(), datetime.time(0, 0))
@@ -106,9 +105,7 @@ elapsed_minutes = min(elapsed_minutes, 1440)
 if mode == "장입속도 기반 (자동)":
     elapsed_charges = charge_rate * (elapsed_minutes / 60)
 
-# ------------------------------
-# 3단계 — AI 환원효율 전체 보정계수
-# ------------------------------
+# AI 환원효율 전체 보정계수
 size_effect = (20 / ore_size + 60 / coke_size) / 2
 melting_effect = 1 + ((melting_capacity - 2500) / 500) * 0.05
 gas_effect = 1 + (blast_volume - 4000) / 8000
@@ -120,78 +117,41 @@ feo_effect = 1 - (feo / 10)
 si_effect = 1 + (si / 5)
 temp_effect = 1 + ((measured_temp - 1500) / 100) * 0.03
 
-# 전체 환원효율 보정 (AI보정)
 reduction_eff_total = reduction_efficiency * size_effect * melting_effect * \
     gas_effect * oxygen_boost * humidity_effect * pressure_boost * \
     blow_pressure_boost * feo_effect * si_effect * temp_effect * K_factor * 0.9
 
-# ------------------------------
-# 4단계 — 생성량 수지계산
-# ------------------------------
-
-# 누적 Ore 투입량 (ton)
+# 생성량 수지계산
 total_ore = ore_per_charge * elapsed_charges
-
-# 누적 T.Fe 투입량 (ton)
 total_fe = total_ore * (tfe_percent / 100)
-
-# AI 보정환원효율 적용 → 용선 생성량 (ton)
 hot_metal = total_fe * reduction_eff_total
-
-# 슬래그 생성량 (ton)
 slag = hot_metal / slag_ratio
-
-# 총 용융 생성량 (ton)
 total_molten = hot_metal + slag
 
-# ------------------------------
-# 5단계 — 출선량 실적계산
-# ------------------------------
-
-# 출선경과시간 계산 (음수 방지)
+# 출선량 수지계산
 lead_start_dt = datetime.datetime.combine(datetime.date.today(), lead_start_time)
 follow_start_dt = datetime.datetime.combine(datetime.date.today(), follow_start_time)
-
 lead_elapsed = max((now - lead_start_dt).total_seconds() / 60, 0)
 follow_elapsed = max((now - follow_start_dt).total_seconds() / 60, 0)
 
-# 선행, 후행 출선량 계산
 lead_tapped = lead_speed * lead_elapsed
 follow_tapped = follow_speed * follow_elapsed
-
-# 누적 배출량 (ton)
 total_tapped = lead_tapped + follow_tapped
 
-# ------------------------------
-# 5단계 — 저선량 수지계산
-# ------------------------------
-
-# 저선량 (ton)
+# 저선량 수지계산
 residual_molten = max(total_molten - total_tapped, 0)
-
-# 저선율 (%)
 residual_rate = (residual_molten / total_molten) * 100
 
-# ------------------------------
-# 5단계 — 공취시간 예측
-# ------------------------------
-
-# 선행 출선 예상 종료시간 (선행 목표출선량 기준)
+# 공취시간 예측
 lead_close_time = lead_start_dt + datetime.timedelta(minutes=(lead_target / lead_speed))
 gap_minutes = (lead_close_time - follow_start_dt).total_seconds() / 60
 gap_minutes = max(gap_minutes, 0)
 
-# ------------------------------
-# 5단계 — TAP당 평균 출선량 계산
-# ------------------------------
+# TAP당 평균수지
 avg_hot_metal_per_tap = hot_metal / completed_taps
 avg_slag_per_tap = slag / completed_taps
 
-# ------------------------------
-# 5단계 — AI 비트경 및 차기출선간격 추천
-# ------------------------------
-
-# AI 비트경 추천 로직 (예시)
+# AI 비트경 추천
 if residual_molten < 100 and residual_rate < 5:
     tap_diameter = 43
 elif residual_molten < 150 and residual_rate < 7:
@@ -199,7 +159,7 @@ elif residual_molten < 150 and residual_rate < 7:
 else:
     tap_diameter = 48
 
-# 차기출선간격 추천
+# 출선간격 추천
 if residual_rate < 5:
     next_tap_interval = "15~20분"
 elif residual_rate < 7:
@@ -209,36 +169,20 @@ elif residual_rate < 9:
 else:
     next_tap_interval = "즉시 (0~5분)"
 
-# ------------------------------
-# 6단계 — AI 목표용선온도 계산
-# ------------------------------
-
-# AI 목표용선온도 기본모델
+# AI 목표용선온도
 base_temp = 1500
 oxygen_effect = oxygen_enrichment * 5
 blast_effect = (blast_volume - 4000) * 0.02
 slag_effect = (slag_ratio - 2.25) * 10
 pressure_effect = (top_pressure - 2.5) * 8
-
 target_temp = base_temp + oxygen_effect + blast_effect + slag_effect + pressure_effect
 
-# ------------------------------
-# 6단계 — AI 이론출선량 비교보정
-# ------------------------------
-
-# AI 자동산출 이론출선량 (ton)
+# 이론출선량 비교
 ai_theoretical_tap = avg_hot_metal_per_tap
-
-# 현장 입력 이론출선량 (ton)
 field_theoretical_tap = theoretical_tap
-
-# 최종 보정 이론출선량 (ton)
 final_theoretical_tap = (ai_theoretical_tap + field_theoretical_tap) / 2
 
-# ------------------------------
-# 6단계 — 위험 경보 등급
-# ------------------------------
-
+# 위험경보
 if residual_rate >= 9:
     status = "⚠ 저선과다 위험"
 elif residual_rate >= 7:
@@ -246,17 +190,13 @@ elif residual_rate >= 7:
 else:
     status = "✅ 정상"
 
-# ------------------------------
-# 7단계 — 최종 출력결과 표시
-# ------------------------------
-
+# 최종 결과 출력
 st.header("📊 AI 실시간 수지분석 결과")
-
 st.write(f"누적 생성량: {total_molten:.1f} ton")
 st.write(f"누적 출선량: {total_tapped:.1f} ton")
 st.write(f"저선량: {residual_molten:.1f} ton")
 st.write(f"저선율: {residual_rate:.2f}%")
-st.write(f"조업상태 경보: {status}")
+st.write(f"조업상태: {status}")
 st.write(f"공취 예상시간: {gap_minutes:.1f} 분")
 st.write(f"선행폐쇄 예상시각: {lead_close_time.strftime('%H:%M')}")
 st.write(f"TAP당 평균 용선배출량: {avg_hot_metal_per_tap:.1f} ton")
@@ -269,12 +209,8 @@ st.write(f"AI 이론출선량: {ai_theoretical_tap:.1f} ton")
 st.write(f"입력 이론출선량: {field_theoretical_tap:.1f} ton")
 st.write(f"최종 보정 이론출선량: {final_theoretical_tap:.1f} ton")
 
-# ------------------------------
-# 7단계 — 실시간 수지 시각화
-# ------------------------------
-
+# 시각화
 st.header("📊 실시간 수지추적 그래프")
-
 time_labels = [i for i in range(0, int(elapsed_minutes)+1, 15)]
 gen_series = [(total_molten / 1440) * t for t in time_labels]
 tap_series = [total_tapped] * len(time_labels)
@@ -293,10 +229,7 @@ plt.legend()
 plt.grid()
 st.pyplot(plt)
 
-# ------------------------------
-# 7단계 — 누적 리포트 기록 및 다운로드
-# ------------------------------
-
+# 누적 리포트 기록
 record = {
     "시각": now.strftime('%Y-%m-%d %H:%M:%S'),
     "누적 생성량": total_molten,
@@ -312,4 +245,3 @@ df = pd.DataFrame(st.session_state['log'])
 st.dataframe(df)
 csv = df.to_csv(index=False).encode('utf-8-sig')
 st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_6_2.csv", mime='text/csv')
-
