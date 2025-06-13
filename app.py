@@ -7,8 +7,8 @@ import matplotlib
 matplotlib.rcParams['font.family'] = 'NanumGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-st.set_page_config(page_title="BlastTap 6.6 Master (AI 용융지연 자동보정)", layout="wide")
-st.title("🔥 BlastTap 6.6 Master AI 고로조업 수지엔진 (AI 자동보정 포함)")
+st.set_page_config(page_title="BlastTap 7.0 Master (반응속도·열수지·환원수지 통합)", layout="wide")
+st.title("🔥 BlastTap 7.0 Master — AI 고로조업 통합 수지엔진 (반응·열·환원 통합보정)")
 
 if 'log' not in st.session_state:
     st.session_state['log'] = []
@@ -24,10 +24,8 @@ today_start = datetime.datetime.combine(base_date, datetime.time(7, 0))
 elapsed_minutes = (now - today_start).total_seconds() / 60
 elapsed_minutes = min(elapsed_minutes, 1440)
 
-# 💡 용융도달시간 AI 보정 모델 시작
-st.sidebar.header("💡 용융지연 보정")
-
-# 사용자 기본지연시간 입력
+# 💡 용융도달시간 AI 보정 시작
+st.sidebar.header("💡 용융지연시간 기본설정")
 melting_lag_base = st.sidebar.number_input("용융도달 기본 지연시간 (분)", value=240)
 
 # ① 장입수지 입력
@@ -55,51 +53,31 @@ humidification = st.sidebar.number_input("조습량 (g/Nm³)", value=20.0)
 top_pressure = st.sidebar.number_input("노정압 (kg/cm²)", value=2.5)
 blast_pressure = st.sidebar.number_input("풍압 (kg/cm²)", value=3.8)
 
-# 📌 AI 보정계수 기준값 설정
+# ✅ 🔥 (신규) 반응속도·열수지·환원수지 동적 AI 보정항목 추가
+st.sidebar.header("④ 반응속도·열수지·환원수지 추가입력")
+
+# 선철 생성속도
+iron_rate = st.sidebar.number_input("선철 생성속도 (ton/min)", value=9.0)
+# 풍온
+hot_blast_temp = st.sidebar.number_input("풍온 (°C)", value=1200)
+# 미분탄 취입량
+pci_rate = st.sidebar.number_input("미분탄 취입량 (kg/thm)", value=180)
+
+# 🔧 AI 보정 기준값 설정
 reference_charge = 5.5
 reference_blast = 4000
 reference_oxygen = 3.0
 reference_humidity = 20
 reference_reduction_eff = 1.0
 
-# ④ FeO / Si 보정 입력
-st.sidebar.header("④ FeO / Si 보정 입력")
-feo = st.sidebar.number_input("슬래그 FeO (%)", value=0.8)
-si = st.sidebar.number_input("용선 Si (%)", value=0.5)
-K_factor = st.sidebar.number_input("K 보정계수", value=1.0)
-
-# ⑤ 용선온도 입력
-st.sidebar.header("⑤ 용선온도 입력")
-measured_temp = st.sidebar.number_input("현장 용선온도 (°C)", value=1520.0)
-
-# ⑥ 장입속도 입력
-st.sidebar.header("⑥ 장입속도 입력")
+# 🔧 AI 용융지연 보정계산
 mode = st.sidebar.radio("장입방식 선택", ["장입속도 기반 (자동)", "누적 Charge 수 직접입력"])
 if mode == "장입속도 기반 (자동)":
     charge_rate = st.sidebar.number_input("장입속도 (charge/h)", value=5.5)
 else:
+    charge_rate = reference_charge  # AI 보정 안전값 적용
     elapsed_charges = st.sidebar.number_input("누적 Charge 수 (charge)", value=30.0)
 
-# ⑦ 출선 실적 입력
-st.sidebar.header("⑦ 출선 실적 입력")
-lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0))
-follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0))
-lead_speed = st.sidebar.number_input("선행 출선속도 (ton/min)", value=4.8)
-follow_speed = st.sidebar.number_input("후행 출선속도 (ton/min)", value=4.8)
-lead_target = st.sidebar.number_input("선행 목표출선량 (ton)", value=1215.0)
-completed_taps = st.sidebar.number_input("종료된 TAP 수 (EA)", value=5)
-
-# ⑧ 계획입력
-st.sidebar.header("⑧ 계획 스케줄 입력")
-plan_charges = st.sidebar.number_input("금일 계획 Charge 수 (EA)", value=126)
-plan_taps = st.sidebar.number_input("금일 계획 TAP 수 (EA)", value=9)
-max_residual_limit = st.sidebar.number_input("최대저선한계 (ton)", value=800)
-
-# ⑨ 예상 일일생산량 입력
-st.sidebar.header("⑨ 예상 일일생산량 입력")
-theoretical_production = st.sidebar.number_input("예상 일일생산량 (ton/day)", value=12600.0)
-
-# 🔧 AI 용융지연 보정계산
 delta_charge = -10 * (charge_rate - reference_charge)
 delta_blast = -5 * (blast_volume - reference_blast) / 100
 delta_oxygen = -5 * (oxygen_enrichment - reference_oxygen)
@@ -111,14 +89,13 @@ melting_lag_final = melting_lag_base + ai_delay_adjust
 if melting_lag_final < 0:
     melting_lag_final = 0
 
-# 결과표시
-st.sidebar.markdown(f"**실시간 AI 용융지연시간: {melting_lag_final:.1f} 분**")
+st.sidebar.markdown(f"**AI 용융지연시간: {melting_lag_final:.1f} 분**")
 
-# 실시간 장입누적계산
+# 장입누적 계산 (시간기반)
 if mode == "장입속도 기반 (자동)":
     elapsed_charges = charge_rate * (elapsed_minutes / 60)
 
-# AI 환원효율 계산
+# 🔧 환원효율 보정 전체 적용 (기존 + 신규 동적 AI 통합)
 size_effect = (20 / ore_size + 60 / coke_size) / 2
 melting_effect = 1 + ((melting_capacity - 2500) / 500) * 0.05
 gas_effect = 1 + (blast_volume - 4000) / 8000
@@ -126,19 +103,32 @@ oxygen_boost = 1 + (oxygen_enrichment / 10)
 humidity_effect = 1 - (humidification / 100)
 pressure_boost = 1 + (top_pressure - 2.5) * 0.05
 blow_pressure_boost = 1 + (blast_pressure - 3.5) * 0.03
-feo_effect = 1 - (feo / 10)
-si_effect = 1 + (si / 5)
-temp_effect = 1 + ((measured_temp - 1500) / 100) * 0.03
+temp_effect = 1 + ((hot_blast_temp - 1100) / 100) * 0.03  # 🔥 풍온 열수지 보정
+pci_effect = 1 + (pci_rate - 150) / 100 * 0.02  # 🔥 PCI 미분탄 보정
+iron_rate_effect = iron_rate / 9.0  # 🔥 선철 생성속도 보정
 
 reduction_eff_total = reduction_efficiency * size_effect * melting_effect * gas_effect * \
-    oxygen_boost * humidity_effect * pressure_boost * blow_pressure_boost * feo_effect * \
-    si_effect * temp_effect * K_factor * 0.9
+    oxygen_boost * humidity_effect * pressure_boost * blow_pressure_boost * temp_effect * \
+    pci_effect * iron_rate_effect * K_factor * 0.9
 
-# 📊 용융물 생성량 수지 (AI 보정 및 지연시간 반영)
+# 📊 생성량 수지
+st.sidebar.header("⑤ 일일 생산계획 입력")
+theoretical_production = st.sidebar.number_input("일일 생산계획량 (ton/day)", value=12600.0)
+
+# 생성량 계산 → 용융지연 보정 반영
 adjusted_minutes = max(elapsed_minutes - melting_lag_final, 0)
 production_ton = theoretical_production * (adjusted_minutes / 1440)
 
-# 출선 수지계산
+# 🔧 출선 수지 계산
+st.sidebar.header("⑥ 출선 실적 입력")
+lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0))
+follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0))
+lead_speed = st.sidebar.number_input("선행 출선속도 (ton/min)", value=4.8)
+follow_speed = st.sidebar.number_input("후행 출선속도 (ton/min)", value=4.8)
+lead_target = st.sidebar.number_input("선행 목표출선량 (ton)", value=1215.0)
+completed_taps = st.sidebar.number_input("종료된 TAP 수 (EA)", value=5)
+plan_taps = st.sidebar.number_input("계획 TAP 수 (EA)", value=9)
+
 lead_start_dt = datetime.datetime.combine(base_date, lead_start_time)
 follow_start_dt = datetime.datetime.combine(base_date, follow_start_time)
 
@@ -156,11 +146,11 @@ else:
 completed_tap_amount = completed_taps * avg_tap_output
 total_tapped = completed_tap_amount + lead_tapped + follow_tapped
 
-# 수지 안정화 보호장치
+# 수지 안정화 보호
 if total_tapped > production_ton:
     total_tapped = production_ton
 
-# 저선 수지계산
+# 저선 수지
 residual_molten = production_ton - total_tapped
 residual_rate = (residual_molten / production_ton) * 100
 
@@ -169,7 +159,7 @@ lead_close_time = lead_start_dt + datetime.timedelta(minutes=(lead_target / lead
 gap_minutes = (lead_close_time - follow_start_dt).total_seconds() / 60
 gap_minutes = max(gap_minutes, 0)
 
-# TAP당 평균 수지계산 (안정형)
+# TAP당 평균 수지계산
 avg_hot_metal_per_tap = production_ton / max(completed_taps, 1)
 avg_slag_per_tap = avg_hot_metal_per_tap / slag_ratio
 
@@ -221,7 +211,6 @@ st.write(f"TAP당 평균 슬래그배출량: {avg_slag_per_tap:.1f} ton")
 st.write(f"추천 비트경: {tap_diameter} Ø")
 st.write(f"차기 출선간격 추천: {next_tap_interval}")
 st.write(f"AI 목표용선온도: {target_temp:.1f} °C")
-st.write(f"현장 용선온도: {measured_temp:.1f} °C")
 st.write(f"AI 자동 용융지연시간: {melting_lag_final:.1f} 분")
 
 # 실시간 수지 시각화
@@ -260,5 +249,4 @@ st.header("📋 누적 조업 리포트")
 df = pd.DataFrame(st.session_state['log'])
 st.dataframe(df)
 csv = df.to_csv(index=False).encode('utf-8-sig')
-st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_6_6.csv", mime='text/csv')
-
+st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_7_0.csv", mime='text/csv')
