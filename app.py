@@ -75,8 +75,8 @@ else:
 # ⑥ 출선 실적 입력 (시각 및 속도)
 # -----------------------------------------------------------
 st.sidebar.header("출선 실적 입력")
-lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0))
-follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0))
+lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0), step=60)
+follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0), step=60)
 lead_start_dt = datetime.datetime.combine(datetime.date.today(), lead_start_time)
 follow_start_dt = datetime.datetime.combine(datetime.date.today(), follow_start_time)
 lead_elapsed = (now - lead_start_dt).total_seconds() / 60
