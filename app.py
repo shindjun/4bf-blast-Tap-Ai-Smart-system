@@ -4,13 +4,13 @@ import datetime
 import matplotlib.pyplot as plt
 import matplotlib
 
-# 한글 폰트 적용 (그래프용)
+# 한글 폰트 적용
 matplotlib.rcParams['font.family'] = 'NanumGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-# 페이지 기본 설정
-st.set_page_config(page_title="BlastTap 7.1 Master (Charge기반)", layout="wide")
-st.title("🔥 BlastTap 7.1 Master — AI 고로조업 수지엔진 (Charge 기반 최종 안정판)")
+# 페이지 설정
+st.set_page_config(page_title="BlastTap 7.2 Master", layout="wide")
+st.title("🔥 BlastTap 7.2 Master — AI 고로조업 수지엔진 (목표온도 교정계수 적용)")
 
 # 세션 초기화
 if 'log' not in st.session_state:
@@ -26,11 +26,11 @@ today_start = datetime.datetime.combine(base_date, datetime.time(7, 0))
 elapsed_minutes = (now - today_start).total_seconds() / 60
 elapsed_minutes = min(elapsed_minutes, 1440)
 
-# 💡 용융지연시간 기본 설정
+# 💡 용융지연시간 기본설정
 st.sidebar.header("💡 용융지연시간 기본설정")
 melting_lag_base = st.sidebar.number_input("용융도달 기본 지연시간 (분)", value=240)
 
-# ① 장입수지 입력8ㅅ88
+# ① 장입수지 입력
 st.sidebar.header("① 장입수지 입력")
 ore_per_charge = st.sidebar.number_input("Ore 장입량 (ton/ch)", value=165.0)
 coke_per_charge = st.sidebar.number_input("Coke 장입량 (ton/ch)", value=33.5)
@@ -71,7 +71,10 @@ K_factor = st.sidebar.number_input("K 보정계수", value=1.0)
 st.sidebar.header("⑥ 현장 용선온도 입력")
 measured_temp = st.sidebar.number_input("현장 용선온도 (°C)", value=1520.0)
 
-# 장입속도 / Charge 입력 방식 선택
+# 🔧 목표온도 교정계수 추가 (7.2 신규)
+st.sidebar.header("⑦ 목표용선온도 교정계수")
+target_temp_factor = st.sidebar.slider("AI 목표온도 교정계수", min_value=0.5, max_value=1.2, value=0.8, step=0.05)
+# 🔧 장입속도 / 누적 Charge 선택 입력
 mode = st.sidebar.radio("장입방식 선택", ["장입속도 기반 (자동)", "누적 Charge 수 직접입력"])
 
 if mode == "장입속도 기반 (자동)":
@@ -81,7 +84,7 @@ else:
     charge_rate = 5.5
     elapsed_charges = st.sidebar.number_input("누적 Charge 수 (charge)", value=30.0)
 
-# AI 용융지연 보정계산
+# 🔧 AI 용융지연시간 보정 계산
 reference_charge = 5.5
 reference_blast = 4000
 reference_oxygen = 3.0
@@ -99,7 +102,7 @@ melting_lag_final = melting_lag_base + ai_delay_adjust
 melting_lag_final = max(melting_lag_final, 0)
 st.sidebar.markdown(f"**AI 용융지연시간: {melting_lag_final:.1f} 분**")
 
-# AI 환원효율 보정
+# 🔧 AI 환원효율 전체 보정 계산
 size_effect = (20 / ore_size + 60 / coke_size) / 2
 melting_effect = 1 + ((melting_capacity - 2500) / 500) * 0.05
 gas_effect = 1 + (blast_volume - 4000) / 8000
@@ -116,13 +119,12 @@ reduction_eff_total = reduction_efficiency * size_effect * melting_effect * gas_
     oxygen_boost * humidity_effect * pressure_boost * blow_pressure_boost * \
     temp_effect * pci_effect * iron_rate_effect * measured_temp_effect * K_factor * 0.9
 
-# 누적 생산량 (누적 Charge 기반 수지)
+# 🔧 누적 생산량 계산 (누적 Charge 기반)
 ore_total = ore_per_charge * elapsed_charges
 total_fe = ore_total * (tfe_percent / 100)
 production_ton = total_fe * reduction_eff_total
-
-# ⑦ 출선 실적 입력
-st.sidebar.header("⑦ 출선 실적 입력")
+# 🔧 출선 실적 입력
+st.sidebar.header("⑧ 출선 실적 입력")
 lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0))
 follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0))
 lead_speed = st.sidebar.number_input("선행 출선속도 (ton/min)", value=4.8)
@@ -148,7 +150,7 @@ total_tapped = completed_tap_amount + lead_tapped + follow_tapped
 if total_tapped > production_ton:
     total_tapped = production_ton
 
-# 저선량 계산
+# 저선 수지 계산
 residual_molten = production_ton - total_tapped
 residual_rate = (residual_molten / production_ton) * 100
 
@@ -178,13 +180,16 @@ elif residual_rate < 9:
 else:
     next_tap_interval = "즉시 (0~5분)"
 
-# AI 목표용선온도 계산
+# 🔧 7.2 핵심: AI 목표온도 교정계수 적용
 base_temp = 1500
 oxygen_effect = oxygen_enrichment * 5
 blast_effect = (blast_volume - 4000) * 0.02
 slag_effect = (slag_ratio - 2.25) * 10
 pressure_effect = (top_pressure - 2.5) * 8
-target_temp = base_temp + oxygen_effect + blast_effect + slag_effect + pressure_effect
+
+# 교정계수 적용
+raw_temp_offset = oxygen_effect + blast_effect + slag_effect + pressure_effect
+target_temp = base_temp + (raw_temp_offset * target_temp_factor)
 
 # 경보판정
 if residual_rate >= 9:
@@ -210,11 +215,16 @@ st.write(f"차기 출선간격 추천: {next_tap_interval}")
 st.write(f"AI 목표용선온도: {target_temp:.1f} °C")
 st.write(f"현장 용선온도: {measured_temp:.1f} °C")
 st.write(f"AI 자동 용융지연시간: {melting_lag_final:.1f} 분")
-
-# 실시간 수지 시각화
+# 🔧 실시간 수지 시각화
 st.header("📊 실시간 수지추적 그래프")
 time_labels = [i for i in range(0, int(elapsed_minutes)+1, 15)]
-gen_series = [(ore_per_charge * (charge_rate * (t / 60)) if mode=="장입속도 기반 (자동)" else ore_per_charge * elapsed_charges) * (tfe_percent/100) * reduction_eff_total for t in time_labels]
+
+# 생성량 시계열 보정 (장입방식에 따라 다르게)
+gen_series = [
+    (ore_per_charge * (charge_rate * (t / 60)) if mode == "장입속도 기반 (자동)"
+     else ore_per_charge * elapsed_charges) * (tfe_percent/100) * reduction_eff_total
+    for t in time_labels
+]
 gen_series = [min(g, production_ton) for g in gen_series]
 tap_series = [total_tapped] * len(time_labels)
 residual_series = [max(g - total_tapped, 0) for g in gen_series]
@@ -232,14 +242,15 @@ plt.legend()
 plt.grid()
 st.pyplot(plt)
 
-# 누적 리포트 기록 및 CSV 다운로드
+# 🔧 누적 리포트 기록 및 CSV 다운로드
 record = {
     "시각": now.strftime('%Y-%m-%d %H:%M:%S'),
     "누적 생산량": production_ton,
     "누적 출선량": total_tapped,
     "저선량": residual_molten,
     "저선율": residual_rate,
-    "조업상태": status
+    "조업상태": status,
+    "목표용선온도": target_temp
 }
 st.session_state['log'].append(record)
 
@@ -247,4 +258,10 @@ st.header("📋 누적 조업 리포트")
 df = pd.DataFrame(st.session_state['log'])
 st.dataframe(df)
 csv = df.to_csv(index=False).encode('utf-8-sig')
-st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_7_1.csv", mime='text/csv')
+st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_7_2.csv", mime='text/csv')
+
+# 🔧 시스템 안정화 보호코드
+if residual_molten < 0:
+    residual_molten = 0
+if total_tapped > production_ton:
+    total_tapped = production_ton
