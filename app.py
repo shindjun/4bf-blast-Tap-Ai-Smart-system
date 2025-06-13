@@ -186,8 +186,7 @@ st.write(f"현장 측정 용선온도: {measured_temp:.1f} °C")
 
 # -----------------------------------------------------------
 # 📊 실시간 수지 시각화
-# -----------------------------------------------------------
-st.header("📊 실시간 수지추적 그래프")
+st.header("📊 Real-time Smelting Balance Tracking")
 
 time_labels = [i for i in range(0, int(elapsed_minutes)+1, 60)]
 gen_series = [(total_molten / 1440) * t for t in time_labels]
@@ -195,12 +194,12 @@ tap_series = [total_tapped] * len(time_labels)
 residual_series = [g - total_tapped for g in gen_series]
 
 plt.figure(figsize=(8, 5))
-plt.plot(time_labels, gen_series, label="누적 생성량")
-plt.plot(time_labels, tap_series, label="누적 출선량")
-plt.plot(time_labels, residual_series, label="저선량")
-plt.xlabel("경과시간 (분)")
+plt.plot(time_labels, gen_series, label="Total Generation (ton)")
+plt.plot(time_labels, tap_series, label="Total Tapped (ton)")
+plt.plot(time_labels, residual_series, label="Residual Molten (ton)")
+plt.xlabel("Elapsed Time (min)")
 plt.ylabel("ton")
-plt.title("실시간 용융물 수지추적")
+plt.title("Real-time Smelting Balance")
 plt.legend()
 plt.grid()
 st.pyplot(plt)
