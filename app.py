@@ -3,7 +3,6 @@ import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 
-# 페이지설정
 st.set_page_config(page_title="BlastTap 6.0 AI Smart Control System", layout="wide")
 st.title("🔥 BlastTap 6.0 AI Smart Control System")
 
@@ -185,10 +184,10 @@ st.write(f"AI 자동목표용선온도: {target_temp:.1f} °C")
 st.write(f"현장 측정 용선온도: {measured_temp:.1f} °C")
 
 # -----------------------------------------------------------
-# 📊 실시간 수지 시각화
+실시간 수지 시각화 (수치변화 강조 안정판)
 st.header("📊 Real-time Smelting Balance Tracking")
 
-time_labels = [i for i in range(0, int(elapsed_minutes)+1, 60)]
+time_labels = [i for i in range(0, int(elapsed_minutes)+1, 15)]  # 15분 간격으로 시간축 세분화
 gen_series = [(total_molten / 1440) * t for t in time_labels]
 tap_series = [total_tapped] * len(time_labels)
 residual_series = [g - total_tapped for g in gen_series]
@@ -200,25 +199,26 @@ plt.plot(time_labels, residual_series, label="Residual Molten (ton)")
 plt.xlabel("Elapsed Time (min)")
 plt.ylabel("ton")
 plt.title("Real-time Smelting Balance")
+
+plt.ylim(0, total_molten * 1.2)  # Y축 변화 확대 (20% 여유)
+plt.xlim(0, max(elapsed_minutes, 240))  # X축: 최소 4시간 확대 보정
 plt.legend()
 plt.grid()
 st.pyplot(plt)
 
-# -----------------------------------------------------------
-# 📋 누적 기록 저장
-# -----------------------------------------------------------
+# 🔧 누적 기록 저장 (기존 리포트 기록부분 동일 적용)
 record = {
-    "시각": now.strftime('%Y-%m-%d %H:%M:%S'),
-    "누적생성량": total_molten,
-    "누적출선량": total_tapped,
-    "저선량": residual_molten,
-    "저선율": residual_rate,
-    "조업상태": status
+    "Time": now.strftime('%Y-%m-%d %H:%M:%S'),
+    "Total Generation": total_molten,
+    "Total Tapped": total_tapped,
+    "Residual": residual_molten,
+    "Residual Rate (%)": residual_rate,
+    "Status": status
 }
 st.session_state['log'].append(record)
 
-st.header("📋 누적 조업 리포트")
+st.header("📋 Cumulative Operation Report")
 df = pd.DataFrame(st.session_state['log'])
 st.dataframe(df)
 csv = df.to_csv(index=False).encode('utf-8-sig')
-st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_6_0.csv", mime='text/csv')
+st.download_button("📥 Download CSV", data=csv, file_name="operation_report.csv", mime='text/csv')
