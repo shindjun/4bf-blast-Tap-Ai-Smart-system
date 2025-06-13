@@ -184,7 +184,7 @@ st.write(f"AI 자동목표용선온도: {target_temp:.1f} °C")
 st.write(f"현장 측정 용선온도: {measured_temp:.1f} °C")
 
 # -----------------------------------------------------------
-# 실시간 수지 시각화 (수치변화 강조 안정판)
+# 📊 실시간 수지 시각화 (수치변화 강조 안정판)
 st.header("📊 Real-time Smelting Balance Tracking")
 
 time_labels = [i for i in range(0, int(elapsed_minutes)+1, 15)]  # 15분 간격으로 시간축 세분화
@@ -200,8 +200,8 @@ plt.xlabel("Elapsed Time (min)")
 plt.ylabel("ton")
 plt.title("Real-time Smelting Balance")
 
-plt.ylim(0, total_molten * 1.2)  # Y축 변화 확대 (20% 여유)
-plt.xlim(0, max(elapsed_minutes, 240))  # X축: 최소 4시간 확대 보정
+plt.ylim(0, total_molten * 1.2)
+plt.xlim(0, max(elapsed_minutes, 240))
 plt.legend()
 plt.grid()
 st.pyplot(plt)
