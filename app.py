@@ -9,13 +9,13 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 
 # 페이지 설정
 st.set_page_config(page_title="BlastTap 7.3 Master", layout="wide")
-st.title("🔥 BlastTap 7.3 Master — AI 고로조업 실시간 수지통제 시스템")
+st.title("🔥 BlastTap 7.3 Master — AI 고로조업 수지통제 (음수보정 안정판)")
 
 # 세션 초기화
 if 'log' not in st.session_state:
     st.session_state['log'] = []
 
-# 기준일자: 07시 기준일자
+# 07시 기준일자
 now = datetime.datetime.now()
 if now.hour < 7:
     base_date = datetime.date.today() - datetime.timedelta(days=1)
@@ -23,17 +23,18 @@ else:
     base_date = datetime.date.today()
 today_start = datetime.datetime.combine(base_date, datetime.time(7, 0))
 elapsed_minutes = (now - today_start).total_seconds() / 60
+elapsed_minutes = max(elapsed_minutes, 0)
 elapsed_minutes = min(elapsed_minutes, 1440)
 
-# 🔧 용융지연시간 기본설정
+# 용융지연시간 기본설정
 st.sidebar.header("💡 용융지연시간 설정")
-melting_lag_base = st.sidebar.number_input("용융도달 기본 지연시간 (분)", value=240)
+melting_lag_base = st.sidebar.number_input("용융도달 기본 지연시간 (분)", value=270)
 
 # ① 장입수지 입력
 st.sidebar.header("① 장입수지 입력")
-ore_per_charge = st.sidebar.number_input("Ore 장입량 (ton/ch)", value=165.0)
-coke_per_charge = st.sidebar.number_input("Coke 장입량 (ton/ch)", value=33.5)
-ore_coke_ratio = st.sidebar.number_input("Ore/Coke 비율 (-)", value=5.0)
+ore_per_charge = st.sidebar.number_input("Ore 장입량 (ton/ch)", value=164.9)
+coke_per_charge = st.sidebar.number_input("Coke 장입량 (ton/ch)", value=33.8)
+ore_coke_ratio = st.sidebar.number_input("Ore/Coke 비율 (-)", value=4.89)
 tfe_percent = st.sidebar.number_input("T.Fe 함량 (%)", value=58.0)
 slag_ratio = st.sidebar.number_input("슬래그 비율 (용선:슬래그)", value=2.25)
 ore_size = st.sidebar.number_input("Ore 입도 (mm)", value=20.0)
@@ -43,22 +44,22 @@ reduction_efficiency = st.sidebar.number_input("환원율 (기본)", value=1.0)
 # ② 용해능력/설비 입력
 st.sidebar.header("② 용해/설비 입력")
 melting_capacity = st.sidebar.number_input("용해능력 (°CKN m²/T-P)", value=2800)
-furnace_volume = st.sidebar.number_input("고로 유효내용적 (m³)", value=3200)
+furnace_volume = st.sidebar.number_input("고로 유효내용적 (m³)", value=4497)
 
 # ③ 조업지수 입력
 st.sidebar.header("③ 조업지수 입력")
-blast_volume = st.sidebar.number_input("송풍량 (Nm³/min)", value=4000.0)
+blast_volume = st.sidebar.number_input("송풍량 (Nm³/min)", value=720.0)
 oxygen_enrichment = st.sidebar.number_input("산소부화율 (%)", value=3.0)
-oxygen_blow = st.sidebar.number_input("산소부화량 (Nm³/hr)", value=6000.0)
+oxygen_blow = st.sidebar.number_input("산소부화량 (Nm³/hr)", value=36971.0)
 humidification = st.sidebar.number_input("조습량 (g/Nm³)", value=20.0)
-top_pressure = st.sidebar.number_input("노정압 (kg/cm²)", value=2.5)
-blast_pressure = st.sidebar.number_input("풍압 (kg/cm²)", value=3.8)
+top_pressure = st.sidebar.number_input("노정압 (kg/cm²)", value=2.2)
+blast_pressure = st.sidebar.number_input("풍압 (kg/cm²)", value=3.9)
 
 # ④ 반응속도·열수지 입력
 st.sidebar.header("④ 반응속도·열수지 입력")
-iron_rate = st.sidebar.number_input("선철 생성속도 (ton/min)", value=9.0)
-hot_blast_temp = st.sidebar.number_input("풍온 (°C)", value=1200)
-pci_rate = st.sidebar.number_input("미분탄 취입량 (kg/thm)", value=180)
+iron_rate = st.sidebar.number_input("선철 생성속도 (ton/min)", value=9.14)
+hot_blast_temp = st.sidebar.number_input("풍온 (°C)", value=1199)
+pci_rate = st.sidebar.number_input("미분탄 취입량 (kg/thm)", value=171)
 
 # ⑤ FeO / Si 보정 입력
 st.sidebar.header("⑤ FeO / Si 보정 입력")
@@ -68,23 +69,27 @@ K_factor = st.sidebar.number_input("K 보정계수", value=1.0)
 
 # ⑥ 현장 용선온도 입력
 st.sidebar.header("⑥ 현장 용선온도 입력")
-measured_temp = st.sidebar.number_input("현장 용선온도 (°C)", value=1520.0)
+measured_temp = st.sidebar.number_input("현장 용선온도 (°C)", value=1515.0)
 
 # ⑦ 목표용선온도 교정계수 입력
 st.sidebar.header("⑦ 목표용선온도 교정계수")
 target_temp_factor = st.sidebar.slider("AI 목표온도 교정계수", min_value=0.5, max_value=1.2, value=0.8, step=0.05)
 
-# ⑧ TAP당 평균출선량 입력 (TAP 기반 수지용)
+# ⑧ TAP당 평균출선량 입력
 st.sidebar.header("⑧ TAP당 평균출선량")
 fixed_avg_tap_output = st.sidebar.number_input("TAP당 평균출선량 (ton)", value=1000.0)
 
-# ⑨ 출선구 관리 입력 (7.3 신규)
+# ⑨ 출선구 관리 입력
 st.sidebar.header("⑨ 출선구 관리")
 lead_taphole = st.sidebar.selectbox("선행 출선구 번호", [1,2,3,4])
 follow_taphole = st.sidebar.selectbox("후행 출선구 번호", [1,2,3,4])
 last_closed_taphole = st.sidebar.selectbox("최근 종료 TAP 출선구 번호", [1,2,3,4])
 
-# 🔧 장입방식 선택 입력
+# ⑩ 목표 일일출선량 입력 (추천 장입속도 계산용)
+st.sidebar.header("⑩ 목표 일일출선량 입력")
+daily_target_production = st.sidebar.number_input("목표 일일출선량 (ton)", value=12538.0)
+
+# 장입방식 선택 (기본 자동)
 mode = st.sidebar.radio("장입방식 선택", ["장입속도 기반 (자동)", "누적 Charge 수 직접입력"])
 
 if mode == "장입속도 기반 (자동)":
@@ -94,25 +99,10 @@ else:
     charge_rate = 5.5
     elapsed_charges = st.sidebar.number_input("누적 Charge 수 (charge)", value=30.0)
 
-# 🔧 AI 용융지연시간 보정 계산
-reference_charge = 5.5
-reference_blast = 4000
-reference_oxygen = 3.0
-reference_humidity = 20
-reference_reduction_eff = 1.0
+# 음수보정
+elapsed_charges = max(elapsed_charges, 0)
 
-delta_charge = -10 * (charge_rate - reference_charge)
-delta_blast = -5 * (blast_volume - reference_blast) / 100
-delta_oxygen = -5 * (oxygen_enrichment - reference_oxygen)
-delta_humidity = 10 * (humidification - reference_humidity) / 10
-delta_reduction = 15 * (reference_reduction_eff - reduction_efficiency)
-
-ai_delay_adjust = delta_charge + delta_blast + delta_oxygen + delta_humidity + delta_reduction
-melting_lag_final = melting_lag_base + ai_delay_adjust
-melting_lag_final = max(melting_lag_final, 0)
-st.sidebar.markdown(f"**AI 용융지연시간 보정결과: {melting_lag_final:.1f} 분**")
-
-# 🔧 AI 환원효율 보정계산
+# AI 환원효율 보정 계산
 size_effect = (20 / ore_size + 60 / coke_size) / 2
 melting_effect = 1 + ((melting_capacity - 2500) / 500) * 0.05
 gas_effect = 1 + (blast_volume - 4000) / 8000
@@ -129,19 +119,29 @@ reduction_eff_total = reduction_efficiency * size_effect * melting_effect * gas_
     oxygen_boost * humidity_effect * pressure_boost * blow_pressure_boost * \
     temp_effect * pci_effect * iron_rate_effect * measured_temp_effect * K_factor * 0.9
 
-# 🔧 장입기반 누적 생산량 (AI 이론생산량)
+# AI 이론 생산량 계산
 ore_total = ore_per_charge * elapsed_charges
+ore_total = max(ore_total, 0)
 total_fe = ore_total * (tfe_percent / 100)
 production_ton = total_fe * reduction_eff_total
 
-# 🔧 TAP 기반 누적생산량 병렬 계산
+# TAP기반 수지 병렬계산
 tap_based_production = fixed_avg_tap_output * elapsed_charges
 
-# 🔧 장입수지 vs TAP수지 편차 계산
+# 장입-출선 수지편차 계산
 production_gap = production_ton - tap_based_production
 
+# 추천 장입속도 산출 (목표출선량 기반)
+if (total_fe * reduction_eff_total) > 0:
+    recommended_charge_per_day = daily_target_production / (total_fe / elapsed_charges * reduction_eff_total)
+    recommended_charge_rate = recommended_charge_per_day / 24
+else:
+    recommended_charge_rate = charge_rate
+
+st.write(f"추천 장입속도: {recommended_charge_rate:.2f} charge/h")
+
 # 🔧 출선 실적 입력
-st.sidebar.header("⑩ 출선 실적 입력")
+st.sidebar.header("⑪ 출선 실적 입력")
 lead_start_time = st.sidebar.time_input("선행 출선 시작시각", value=datetime.time(8, 0))
 follow_start_time = st.sidebar.time_input("후행 출선 시작시각", value=datetime.time(9, 0))
 lead_speed = st.sidebar.number_input("선행 출선속도 (ton/min)", value=4.8)
@@ -163,13 +163,14 @@ avg_tap_output = production_ton / plan_taps if plan_taps > 0 else production_ton
 completed_tap_amount = completed_taps * avg_tap_output
 total_tapped = completed_tap_amount + lead_tapped + follow_tapped
 
-# 🔧 생산량 초과방지
+# 생산량 초과 방지
 if total_tapped > production_ton:
     total_tapped = production_ton
 
 # 🔧 저선량 및 저선율 계산
 residual_molten = production_ton - total_tapped
-residual_rate = (residual_molten / production_ton) * 100
+residual_molten = max(residual_molten, 0)
+residual_rate = (residual_molten / production_ton) * 100 if production_ton > 0 else 0
 
 # 🔧 공취 예상시간
 lead_close_time = lead_start_dt + datetime.timedelta(minutes=(lead_target / lead_speed))
@@ -203,7 +204,6 @@ oxygen_effect = oxygen_enrichment * 5
 blast_effect = (blast_volume - 4000) * 0.02
 slag_effect = (slag_ratio - 2.25) * 10
 pressure_effect = (top_pressure - 2.5) * 8
-
 raw_temp_offset = oxygen_effect + blast_effect + slag_effect + pressure_effect
 target_temp = base_temp + (raw_temp_offset * target_temp_factor)
 
@@ -222,13 +222,13 @@ all_tapholes = {1,2,3,4}
 active_tapholes = {lead_taphole, follow_taphole}
 standby_tapholes = list(all_tapholes - active_tapholes)
 
-# 🔧 결과 출력
-st.header("📊 AI 실시간 수지분석 결과")
+# 🔧 실시간 결과 출력
+st.header("📊 AI 수지분석 결과")
 st.write(f"누적 생산량 (AI): {production_ton:.1f} ton")
 st.write(f"누적 출선량: {total_tapped:.1f} ton")
 st.write(f"저선량: {residual_molten:.1f} ton")
 st.write(f"저선율: {residual_rate:.2f}%")
-st.write(f"수지편차 (장입-출선): {production_gap:.1f} ton")
+st.write(f"수지편차 (AI-TAP): {production_gap:.1f} ton")
 st.write(f"조업상태: {status}")
 st.write(f"공취 예상시간: {gap_minutes:.1f} 분")
 st.write(f"선행폐쇄 예상시각: {lead_close_time.strftime('%H:%M')}")
@@ -238,9 +238,9 @@ st.write(f"추천 비트경: {tap_diameter} Ø")
 st.write(f"차기 출선간격 추천: {next_tap_interval}")
 st.write(f"AI 목표용선온도: {target_temp:.1f} °C")
 st.write(f"현장 용선온도: {measured_temp:.1f} °C")
-st.write(f"AI 자동 용융지연시간: {melting_lag_final:.1f} 분")
+st.write(f"추천 장입속도: {recommended_charge_rate:.2f} charge/h")
 st.write(f"선행출선구: {lead_taphole}번, 후행출선구: {follow_taphole}번")
-st.write(f"대기출선구 (Standby): {standby_tapholes}")
+st.write(f"대기출선구: {standby_tapholes}")
 
 # 🔧 실시간 수지 시각화
 st.header("📊 실시간 수지추적 그래프")
@@ -289,8 +289,8 @@ st.dataframe(df)
 csv = df.to_csv(index=False).encode('utf-8-sig')
 st.download_button("📥 CSV 다운로드", data=csv, file_name="조업리포트_7_3.csv", mime='text/csv')
 
-# 🔧 시스템 안정화 보호코드
-if residual_molten < 0:
-    residual_molten = 0
-if total_tapped > production_ton:
-    total_tapped = production_ton
+# 🔧 안정화 보호코드 (최종)
+residual_molten = max(residual_molten, 0)
+total_tapped = min(total_tapped, production_ton)
+elapsed_charges = max(elapsed_charges, 0)
+production_ton = max(production_ton, 0)
